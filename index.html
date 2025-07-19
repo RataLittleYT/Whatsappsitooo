@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invitaciones Masivas a Grupo WhatsApp</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        h1 {
+            color: #25D366;
+            text-align: center;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        .input-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f0fff4;
+            border-radius: 8px;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            margin: 8px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: #25D366;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 0;
+            transition: background 0.3s;
+            display: block;
+            width: 100%;
+        }
+        button:hover {
+            background-color: #128C7E;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #results {
+            margin-top: 30px;
+        }
+        .contact-item {
+            padding: 12px;
+            border-bottom: 1px solid #eee;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .contact-info {
+            flex: 1;
+            min-width: 250px;
+        }
+        .whatsapp-btn {
+            background-color: #25D366;
+            color: white;
+            text-decoration: none;
+            padding: 8px 15px;
+            border-radius: 4px;
+            margin-left: 10px;
+            white-space: nowrap;
+        }
+        .whatsapp-btn:hover {
+            background-color: #128C7E;
+        }
+        .progress {
+            width: 100%;
+            background-color: #ddd;
+            border-radius: 5px;
+            margin: 15px 0;
+            display: none;
+        }
+        .progress-bar {
+            height: 20px;
+            background-color: #25D366;
+            border-radius: 5px;
+            width: 0%;
+            transition: width 0.3s;
+        }
+        .instructions {
+            background: #fff8e1;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Invitaciones Masivas a Grupo WhatsApp</h1>
+        
+
+        <div class="input-section">
+            <h3>1. Configuración de la invitación</h3>
+            <input type="text" id="groupLink" placeholder="Pega aquí el enlace de invitación al grupo">
+            <textarea id="customMessage" rows="3" placeholder="Escribe tu mensaje personalizado (ej: Hola [Nombre], te invito al grupo de padres de familia..."></textarea>
+        </div>
+
+        <div class="input-section">
+            <h3>2. Subir archivo Excel</h3>
+            <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" />
+            <p>Formato esperado: Número | Nombre Alumno | ... | Nombre Tutor | Teléfono | ...</p>
+        </div>
+
+        <button id="generateInvites" disabled>Generar Enlaces de Invitación</button>
+
+        <div class="progress" id="progressContainer">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script>
+        // Elementos del DOM
+        const fileInput = document.getElementById('fileInput');
+        const groupLinkInput = document.getElementById('groupLink');
+        const customMessageInput = document.getElementById('customMessage');
+        const generateInvitesBtn = document.getElementById('generateInvites');
+        const resultsDiv = document.getElementById('results');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+
+        // Variables globales
+        let contactsData = [];
+        let groupLink = '';
+        let customMessage = '';
+
+        // Escuchar cambios en los inputs
+        groupLinkInput.addEventListener('input', updateGenerateButtonState);
+        customMessageInput.addEventListener('input', updateGenerateButtonState);
+        fileInput.addEventListener('change', handleFileUpload);
+
+        // Función para actualizar el estado del botón de generación
+        function updateGenerateButtonState() {
+            groupLink = groupLinkInput.value.trim();
+            customMessage = customMessageInput.value.trim();
+            
+            generateInvitesBtn.disabled = !(groupLink && customMessage && contactsData.length > 0);
+        }
+
+        // Función para manejar la subida del archivo
+        function handleFileUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+
+                    contactsData = jsonData.map(row => {
+                        return {
+                            studentName: row[1] || '',
+                            tutorName: row[6] || '',
+                            phone: row[7] ? String(row[7]).replace(/\D/g, '') : ''
+                        };
+                    }).filter(contact => {
+                        // Filtrar solo contactos con número válido (10 dígitos mínimo)
+                        const phone = contact.phone.replace(/\D/g, '');
+                        return phone.length >= 10;
+                    });
+
+                    if (contactsData.length > 0) {
+                        resultsDiv.innerHTML = `<p>${contactsData.length} contactos válidos encontrados.</p>`;
+                        updateGenerateButtonState();
+                    } else {
+                        resultsDiv.innerHTML = '<p style="color:red;">No se encontraron contactos válidos.</p>';
+                    }
+                } catch (error) {
+                    resultsDiv.innerHTML = `<p style="color:red;">Error al procesar el archivo: ${error.message}</p>`;
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        // Función para generar los enlaces de invitación
+        generateInvitesBtn.addEventListener('click', function() {
+            groupLink = groupLinkInput.value.trim();
+            customMessage = customMessageInput.value.trim();
+            
+            if (!groupLink || !customMessage || contactsData.length === 0) return;
+
+            // Mostrar progreso
+            progressContainer.style.display = 'block';
+            progressBar.style.width = '0%';
+            resultsDiv.innerHTML = '<h3>Enlaces de invitación:</h3>';
+
+            // Procesar contactos
+            let processed = 0;
+            const total = contactsData.length;
+
+            contactsData.forEach((contact, index) => {
+                setTimeout(() => {
+                    const phone = contact.phone.replace(/\D/g, '');
+                    if (phone.length >= 10) {
+                        const name = contact.tutorName || contact.studentName || '';
+                        
+                        // Personalizar el mensaje
+                        let message = customMessage
+                            .replace('[Nombre]', name)
+                            .replace('[Alumno]', contact.studentName)
+                            .replace('[Tutor]', contact.tutorName);
+                        
+                        // Asegurarse de incluir el enlace al grupo
+                        if (!message.includes(groupLink)) {
+                            message += `\n\n${groupLink}`;
+                        }
+                        
+                        // Crear enlace de WhatsApp
+                        const whatsappLink = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+                        
+                        // Crear elemento en la lista
+                        const contactDiv = document.createElement('div');
+                        contactDiv.className = 'contact-item';
+                        contactDiv.innerHTML = `
+                            <div class="contact-info">
+                                <strong>${name}</strong><br>
+                                ${contact.studentName ? 'Alumno: ' + contact.studentName + '<br>' : ''}
+                                Teléfono: ${phone}
+                            </div>
+                            <a href="${whatsappLink}" target="_blank" class="whatsapp-btn">Enviar invitación</a>
+                        `;
+                        resultsDiv.appendChild(contactDiv);
+                    }
+
+                    // Actualizar barra de progreso
+                    processed++;
+                    progressBar.style.width = `${(processed / total) * 100}%`;
+
+                    // Ocultar barra al finalizar
+                    if (processed === total) {
+                        setTimeout(() => {
+                            progressContainer.style.display = 'none';
+                        }, 500);
+                    }
+                }, index * 100); // Pequeño retardo para evitar bloqueo de UI
+            });
+        });
+    </script>
+</body>
+</html>
