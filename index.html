@@ -66,6 +66,13 @@
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
+            transition: background-color 0.3s;
+            margin-bottom: 5px;
+            border-radius: 5px;
+        }
+        .contact-item.processed {
+            background-color: #e8f5e9;
+            border-left: 4px solid #25D366;
         }
         .contact-info {
             flex: 1;
@@ -79,9 +86,15 @@
             border-radius: 4px;
             margin-left: 10px;
             white-space: nowrap;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
         }
         .whatsapp-btn:hover {
             background-color: #128C7E;
+        }
+        .whatsapp-btn.processed {
+            background-color: #81c784;
         }
         .progress {
             width: 100%;
@@ -103,11 +116,17 @@
             border-radius: 8px;
             margin-bottom: 20px;
         }
+        .status {
+            font-size: 12px;
+            color: #666;
+            margin-left: 10px;
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Invitaciones Masivas a Grupo WhatsApp</h1>
+        <h1>Invitaciones Masivas</h1>
         
 
         <div class="input-section">
@@ -146,6 +165,7 @@
         let contactsData = [];
         let groupLink = '';
         let customMessage = '';
+        let processedContacts = JSON.parse(localStorage.getItem('processedContacts')) || [];
 
         // Escuchar cambios en los inputs
         groupLinkInput.addEventListener('input', updateGenerateButtonState);
@@ -231,20 +251,51 @@
                             message += `\n\n${groupLink}`;
                         }
                         
-                        // Crear enlace de WhatsApp
-                        const whatsappLink = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+                        // Verificar si ya fue procesado
+                        const isProcessed = processedContacts.includes(phone);
                         
                         // Crear elemento en la lista
                         const contactDiv = document.createElement('div');
-                        contactDiv.className = 'contact-item';
+                        contactDiv.className = `contact-item ${isProcessed ? 'processed' : ''}`;
+                        contactDiv.dataset.phone = phone;
+                        
+                        const whatsappBtn = document.createElement('button');
+                        whatsappBtn.className = `whatsapp-btn ${isProcessed ? 'processed' : ''}`;
+                        whatsappBtn.textContent = isProcessed ? 'Invitación enviada' : 'Enviar invitación';
+                        
+                        if (!isProcessed) {
+                            whatsappBtn.onclick = function() {
+                                // Abrir WhatsApp
+                                window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
+                                
+                                // Marcar como procesado
+                                if (!processedContacts.includes(phone)) {
+                                    processedContacts.push(phone);
+                                    localStorage.setItem('processedContacts', JSON.stringify(processedContacts));
+                                }
+                                
+                                // Actualizar UI
+                                this.classList.add('processed');
+                                this.textContent = 'Invitación enviada';
+                                contactDiv.classList.add('processed');
+                                
+                                // Agregar marca de tiempo
+                                const statusSpan = document.createElement('span');
+                                statusSpan.className = 'status';
+                                statusSpan.textContent = new Date().toLocaleTimeString();
+                                contactDiv.querySelector('.contact-info').appendChild(statusSpan);
+                            };
+                        }
+                        
                         contactDiv.innerHTML = `
                             <div class="contact-info">
                                 <strong>${name}</strong><br>
                                 ${contact.studentName ? 'Alumno: ' + contact.studentName + '<br>' : ''}
                                 Teléfono: ${phone}
+                                ${isProcessed ? '<span class="status">' + new Date().toLocaleTimeString() + '</span>' : ''}
                             </div>
-                            <a href="${whatsappLink}" target="_blank" class="whatsapp-btn">Enviar invitación</a>
                         `;
+                        contactDiv.appendChild(whatsappBtn);
                         resultsDiv.appendChild(contactDiv);
                     }
 
@@ -258,9 +309,12 @@
                             progressContainer.style.display = 'none';
                         }, 500);
                     }
-                }, index * 100); // Pequeño retardo para evitar bloqueo de UI
+                }, index * 50); // Pequeño retardo para evitar bloqueo de UI
             });
         });
+
+        // Limpiar localStorage (para desarrollo)
+        // localStorage.removeItem('processedContacts');
     </script>
 </body>
 </html>
